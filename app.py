@@ -19,11 +19,11 @@ try:
 
     if len(df.columns) >= 3:
         if len(df.columns) == 3:
-            df.columns = ["名前", "予約日", "時間帯"]
+            df.columns = ["名前", "予約日", "時間"]
             df["パスワード"] = ""
         else:
             df = df.iloc[:, :4]
-            df.columns = ["名前", "予約日", "時間帯", "パスワード"]
+            df.columns = ["名前", "予約日", "時間", "パスワード"]
 except Exception as e:
     st.error(f"設定ファイルまたはデータの読み込みに失敗しました: {e}")
     st.stop()
@@ -92,7 +92,7 @@ with tab2:
     if not df.empty:
         for index, row in df.iterrows():
             try:
-                time_slot_str = str(row["時間帯"])
+                time_slot_str = str(row["時間"])
                 date_str = str(row["予約日"])
                 name_str = str(row["名前"])
 
