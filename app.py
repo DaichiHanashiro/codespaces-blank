@@ -5,12 +5,8 @@ import requests
 import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
-import extra_streamlit_components as stx  # 🍪 Cookie管理用ライブラリ
 
 st.set_page_config(layout="wide")
-
-# ─── Cookieマネージャーの初期化 ───
-cookie_manager = stx.get_cookie_manager()
 
 # ─── 1. 設定・データの読み込み ───
 try:
@@ -33,43 +29,35 @@ except Exception as e:
     st.stop()
 
 
-# ─── 2. Cookie & URLパラメータからの名前読み込み（端末永久保存） ───
+# ─── 2. URLパラメータからの名前読み込み ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-# 🍪 スマホのCookieから保存された名前を取得
-saved_cookie_user = cookie_manager.get(cookie="studio_user_name")
-
-# 優先順位: URLパラメータ > Cookie > セッション
+# セッション状態の更新
 if url_user:
-    user_name = url_user
-    cookie_manager.set("studio_user_name", url_user, expires_at=datetime.datetime(2030, 1, 1))
-elif saved_cookie_user:
-    user_name = saved_cookie_user
-else:
-    user_name = st.session_state.get("saved_user", "")
+    st.session_state["saved_user"] = url_user
 
-st.session_state["saved_user"] = user_name
+user_name = st.session_state.get("saved_user", "")
 
 
 # ⚡⚡⚡ 3. 【QR自動打刻判定】 ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
-    # 1️⃣ Cookieにも名前が無い場合（本当の初回）
+    # 1️⃣ 名前がない場合（初回のみ入力）
     if not user_name:
-        st.info("💡 初めての方は、お名前を入力してください。（このスマホに永久記憶され、次回からQR読み取りだけで即打刻されます！）")
+        st.info("💡 お名前を入力してください。（入力後、次回からの専用リンクが生成されます）")
         input_name = st.text_input("お名前を入力してEnter")
         if input_name:
             clean_name = input_name.strip()
-            # 🍪 Cookieに2030年まで名前を保存！
-            cookie_manager.set("studio_user_name", clean_name, expires_at=datetime.datetime(2030, 1, 1))
             st.session_state["saved_user"] = clean_name
+            # 名前入りのURLにして再読み込み
             st.query_params["action"] = auto_action
+            st.query_params["user"] = clean_name
             st.rerun()
     
-    # 2️⃣ 名前がある場合（全自動で爆速打刻！）
+    # 2️⃣ 名前がある場合（即座に自動打刻！）
     else:
         if "auto_done" not in st.session_state:
             st.session_state["auto_done"] = True
@@ -287,17 +275,17 @@ with tab2:
     
     if user_name:
         st.success(f"👤 **{user_name}** さんとして認識されています")
-        if st.button("別の名前で登録し直す"):
-            cookie_manager.delete("studio_user_name")
+        if st.button("お名前を変更する"):
             st.session_state["saved_user"] = ""
+            st.query_params.clear()
             st.rerun()
     else:
-        st.info("💡 お名前を入力して登録すると、このスマホに永久記憶されます。")
+        st.info("💡 お名前を入力すると、この画面で名前付きURLが保持されます。")
         input_name = st.text_input("お名前を入力")
         if input_name:
             clean_name = input_name.strip()
-            cookie_manager.set("studio_user_name", clean_name, expires_at=datetime.datetime(2030, 1, 1))
             st.session_state["saved_user"] = clean_name
+            st.query_params["user"] = clean_name
             st.rerun()
 
     st.divider()
@@ -339,7 +327,6 @@ with tab3:
     st.subheader("🔲 壁貼り用 自動打刻QRコード作成")
     st.write("部屋の入り口（入室用）と出口（退室用）に貼るQRコードを作成できます。")
     
-    # 既存のアプリURLをデフォルトでセット
     base_url = st.text_input("アプリのベースURL", value="https://mmc-studio.streamlit.app")
     
     col_qr1, col_qr2 = st.columns(2)
