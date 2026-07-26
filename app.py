@@ -173,6 +173,44 @@ with tab1:
 
     with col2:
         st.subheader("📅 予約カレンダー")
+        
+        # 📱 スマホ表示のズレ・重なりを解消するカスタムCSS
+        st.markdown(
+            """
+            <style>
+            /* 1. ヘッダーボタンとタイトルが重ならないよう自動折返し */
+            .fc-header-toolbar {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                gap: 6px !important;
+                justify-content: space-between !important;
+            }
+            /* 2. タイトルの文字サイズをスマホに合わせて最適化 */
+            .fc-toolbar-title {
+                font-size: 1.0rem !important;
+                white-space: normal !important;
+                line-height: 1.2 !important;
+            }
+            /* 3. ボタンのパディングを小さくしてコンパクト化 */
+            .fc-button {
+                padding: 0.25em 0.5em !important;
+                font-size: 0.75rem !important;
+            }
+            /* 4. 曜日ヘッダーの文字サイズと重なり防止 */
+            .fc-col-header-cell-cushion {
+                font-size: 0.7rem !important;
+                padding: 2px !important;
+                word-break: break-all !important;
+            }
+            /* 5. 縦の時刻ラベルの文字調整 */
+            .fc-timegrid-slot-label-frame {
+                font-size: 0.75rem !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
         calendar_options = {
             "initialView": "timeGridWeek",
             "headerToolbar": {
@@ -184,6 +222,14 @@ with tab1:
             "slotMinTime": "08:00:00",
             "slotMaxTime": "24:00:00",
             "allDaySlot": False,
+            # 💡 スマホの狭い画面でもタイトルが綺麗に収まるフォーマット
+            "titleFormat": { "year": "numeric", "month": "short", "day": "numeric" },
+            "buttonText": {
+                "today": "今日",
+                "month": "月",
+                "week": "週",
+                "day": "日"
+            }
         }
         calendar(events=calendar_events, options=calendar_options)
 
