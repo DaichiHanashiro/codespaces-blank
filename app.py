@@ -5,9 +5,8 @@ import requests
 import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
-import streamlit.components.v1 as components
 
-st.set_page_config(layout="wide")
+st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
 
 # ─── 1. 設定・データの読み込み ───
 try:
@@ -29,82 +28,72 @@ except Exception as e:
     st.error(f"設定ファイルまたはデータの読み込みに失敗しました: {e}")
     st.stop()
 
-
-# ─── 2. URLパラメータ＆名前の永続記憶処理 ───
+# URLパラメータ（QRコードの ?action=checkin 判定用）
 query_params = st.query_params
 auto_action = query_params.get("action", None)
-url_user = query_params.get("user", "")
-
-# URLに名前があればセッションに保存
-if url_user:
-    st.session_state["saved_user"] = url_user
-
-user_name = st.session_state.get("saved_user", "")
-
-# 📱 スマホのLocalStorage（ブラウザ記憶）と同期するためのHTML/JS
-js_code = f"""
-<script>
-    // URLに名前がある場合はLocalStorageに永久保存
-    const urlParams = new URLSearchParams(window.location.search);
-    const urlUser = urlParams.get('user');
-    if (urlUser) {{
-        localStorage.setItem('studio_user_name', urlUser);
-    }}
-    
-    // LocalStorageから名前を取得して、なければ自動でURLに付加してリロード
-    const savedUser = localStorage.getItem('studio_user_name');
-    if (savedUser && !urlUser) {{
-        urlParams.set('user', savedUser);
-        window.location.search = urlParams.toString();
-    }}
-</script>
-"""
-components.html(js_code, height=0)
-
-
-# ⚡⚡⚡ 3. 【QR自動打刻判定】 ───
-if auto_action in ["checkin", "checkout"]:
-    st.subheader("⚡ 自動打刻（入退室）")
-    
-    # 1️⃣ スマホに名前が一切保存されていない場合（初回のみ）
-    if not user_name:
-        st.info("💡 お名前を入力してください。（このスマホに自動記憶され、次回からQR読み取りだけで即打刻されます！）")
-        input_name = st.text_input("お名前を入力してEnter")
-        if input_name:
-            clean_name = input_name.strip()
-            st.session_state["saved_user"] = clean_name
-            st.query_params["action"] = auto_action
-            st.query_params["user"] = clean_name
-            st.rerun()
-    
-    # 2️⃣ 名前がある場合（即座に自動打刻！）
-    else:
-        if "auto_done" not in st.session_state:
-            st.session_state["auto_done"] = True
-            log_payload = {"action": auto_action, "name": user_name}
-            try:
-                res = requests.post(gas_url, json=log_payload)
-                if "Success" in res.text:
-                    status_label = "入室" if auto_action == "checkin" else "退室"
-                    st.balloons()
-                    st.success(f"🎉【{status_label}完了】{user_name} さんの打刻を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
-                else:
-                    st.error(f"打刻エラー: {res.text}")
-            except Exception as e:
-                st.error(f"通信エラー: {e}")
-        else:
-            status_label = "入室" if auto_action == "checkin" else "退室"
-            st.success(f"✅ {user_name} さんの【{status_label}】は打刻済みです。")
-            
-        st.divider()
 
 
 st.title("スタジオ総合管理システム 🛡️📱")
 
-tab1, tab2, tab3 = st.tabs(["📅 予約＆カレンダー", "🚪 ワンタップ打刻", "🔲 壁貼り用QR作成"])
+# 🔀 タブ順変更：1番目を打刻、2番目を予約＆カレンダーに配置！
+tab1, tab2, tab3 = st.tabs(["🚪 打刻（入室・退室）", "📅 予約＆カレンダー", "🔲 壁貼り用QR作成"])
 
-# ─── タブ1：予約＆カレンダー画面 ───
+
+# ─── タブ1：打刻画面（メイン） ───
 with tab1:
+    st.subheader("📱 入退室打刻")
+    
+    if auto_action == "checkin":
+        st.info("💡 **【入室モード】** お名前を入力して「入室する」を押してください。")
+    elif auto_action == "checkout":
+        st.info("💡 **【退室モード】** お名前を入力して「退室する」を押してください。")
+    else:
+        st.write("お名前を入力して、入室または退室ボタンを押してください。")
+
+    # オートフィルが働きやすい標準的なテキスト入力欄
+    user_name_input = st.text_input("お名前（タップすると候補が出ます）", key="main_user_name")
+    
+    st.divider()
+
+    col_in, col_out = st.columns(2)
+    
+    with col_in:
+        # QRがcheckinだった場合はボタンを強調
+        btn_type = "primary" if auto_action == "checkin" or not auto_action else "secondary"
+        if st.button("🚪 入室する", use_container_width=True, type=btn_type):
+            if user_name_input:
+                log_payload = {"action": "checkin", "name": user_name_input.strip()}
+                try:
+                    res = requests.post(gas_url, json=log_payload)
+                    if "Success" in res.text:
+                        st.balloons()
+                        st.success(f"🎉 **{user_name_input}** さん、入室を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
+                    else:
+                        st.error(f"打刻エラー: {res.text}")
+                except Exception as e:
+                    st.error(f"通信エラー: {e}")
+            else:
+                st.warning("⚠️ お名前を入力してください。")
+
+    with col_out:
+        btn_type = "primary" if auto_action == "checkout" else "secondary"
+        if st.button("🚪 退室する", use_container_width=True, type=btn_type):
+            if user_name_input:
+                log_payload = {"action": "checkout", "name": user_name_input.strip()}
+                try:
+                    res = requests.post(gas_url, json=log_payload)
+                    if "Success" in res.text:
+                        st.success(f"👋 **{user_name_input}** さん、退室を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
+                    else:
+                        st.error(f"打刻エラー: {res.text}")
+                except Exception as e:
+                    st.error(f"通信エラー: {e}")
+            else:
+                st.warning("⚠️ お名前を入力してください。")
+
+
+# ─── タブ2：予約＆カレンダー画面 ───
+with tab2:
     calendar_events = []
     if not df.empty:
         for index, row in df.iterrows():
@@ -148,7 +137,7 @@ with tab1:
         time_slot = f"{start_time_input.strftime('%H:%M')}-{end_time_input.strftime('%H:%M')}"
 
         with st.form("reserve_form"):
-            name = st.text_input("お名前", value=user_name if user_name else "")
+            name = st.text_input("お名前")
             password = st.text_input("キャンセル用暗証番号（4桁など）", type="password")
             submit = st.form_submit_button("予約する")
 
@@ -289,59 +278,6 @@ with tab1:
         
         calendar(events=calendar_events, options=calendar_options, custom_css=calendar_css)
 
-# ─── タブ2：ワンタップ手動打刻 ───
-with tab2:
-    st.subheader("📱 入退室打刻（手動）")
-    
-    if user_name:
-        st.success(f"👤 **{user_name}** さんとして認識されています")
-        if st.button("お名前を変更・リセットする"):
-            st.session_state["saved_user"] = ""
-            st.query_params.clear()
-            # LocalStorageを削除するJavaScriptを実行
-            components.html("<script>localStorage.removeItem('studio_user_name'); window.location.href = window.location.pathname;</script>", height=0)
-    else:
-        st.info("💡 お名前を入力すると、このスマホに永久記録されます。")
-        input_name = st.text_input("お名前を入力")
-        if input_name:
-            clean_name = input_name.strip()
-            st.session_state["saved_user"] = clean_name
-            st.query_params["user"] = clean_name
-            st.rerun()
-
-    st.divider()
-
-    col_in, col_out = st.columns(2)
-    with col_in:
-        if st.button("🚪 入室（打刻）", use_container_width=True, type="primary"):
-            if user_name:
-                log_payload = {"action": "checkin", "name": user_name}
-                try:
-                    res = requests.post(gas_url, json=log_payload)
-                    if "Success" in res.text:
-                        st.balloons()
-                        st.success(f"✅ {user_name} さん、入室を記録しました！")
-                    else:
-                        st.error(f"打刻エラー: {res.text}")
-                except Exception as e:
-                    st.error(f"通信エラー: {e}")
-            else:
-                st.warning("お名前を入力してください。")
-
-    with col_out:
-        if st.button("🚪 退室（打刻）", use_container_width=True):
-            if user_name:
-                log_payload = {"action": "checkout", "name": user_name}
-                try:
-                    res = requests.post(gas_url, json=log_payload)
-                    if "Success" in res.text:
-                        st.success(f"👋 {user_name} さん、退室を記録しました！")
-                    else:
-                        st.error(f"打刻エラー: {res.text}")
-                except Exception as e:
-                    st.error(f"通信エラー: {e}")
-            else:
-                st.warning("お名前を入力してください。")
 
 # ─── タブ3：🔲 自動打刻用QRコード生成 ───
 with tab3:
