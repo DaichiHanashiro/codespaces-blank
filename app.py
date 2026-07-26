@@ -1,5 +1,5 @@
 import streamlit as st
-import datetime
+from datetime import datetime, timezone, timedelta, date, time
 import pandas as pd
 import requests
 import qrcode
@@ -7,6 +7,9 @@ from io import BytesIO
 from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
+
+# 🇯🇵 日本標準時（JST = UTC+9）の定義
+JST = timezone(timedelta(hours=9))
 
 # ─── 1. 設定・データの読み込み ───
 try:
@@ -57,12 +60,20 @@ with tab1:
     with col_in:
         if st.button("🚪 入室する", use_container_width=True, type="primary"):
             if user_name_input:
-                log_payload = {"action": "checkin", "name": user_name_input.strip()}
+                # 🇯🇵 日本時間の現在時刻を取得
+                now_jst = datetime.now(JST)
+                time_str = now_jst.strftime('%H:%M')
+
+                log_payload = {
+                    "action": "checkin", 
+                    "name": user_name_input.strip(),
+                    "time": time_str
+                }
                 try:
                     res = requests.post(gas_url, json=log_payload)
                     if "Success" in res.text:
                         st.balloons()
-                        st.success(f"🎉 **{user_name_input}** さん、入室を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
+                        st.success(f"🎉 **{user_name_input}** さん、入室を記録しました！（{time_str}）")
                     else:
                         st.error(f"打刻エラー: {res.text}")
                 except Exception as e:
@@ -73,11 +84,19 @@ with tab1:
     with col_out:
         if st.button("🚪 退室する", use_container_width=True):
             if user_name_input:
-                log_payload = {"action": "checkout", "name": user_name_input.strip()}
+                # 🇯🇵 日本時間の現在時刻を取得
+                now_jst = datetime.now(JST)
+                time_str = now_jst.strftime('%H:%M')
+
+                log_payload = {
+                    "action": "checkout", 
+                    "name": user_name_input.strip(),
+                    "time": time_str
+                }
                 try:
                     res = requests.post(gas_url, json=log_payload)
                     if "Success" in res.text:
-                        st.success(f"👋 **{user_name_input}** さん、退室を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
+                        st.success(f"👋 **{user_name_input}** さん、退室を記録しました！（{time_str}）")
                     else:
                         st.error(f"打刻エラー: {res.text}")
                 except Exception as e:
@@ -120,13 +139,15 @@ with tab2:
 
     with col1:
         st.subheader("📝 新規予約")
-        date = st.date_input("予約日", datetime.date.today())
+        # 🇯🇵 予約日選択の初期値を日本時間の「今日」に設定
+        today_jst = datetime.now(JST).date()
+        date_val = st.date_input("予約日", today_jst)
         
         col_start, col_end = st.columns(2)
         with col_start:
-            start_time_input = st.time_input("開始時刻", datetime.time(9, 0))
+            start_time_input = st.time_input("開始時刻", time(9, 0))
         with col_end:
-            end_time_input = st.time_input("終了時刻", datetime.time(10, 0))
+            end_time_input = st.time_input("終了時刻", time(10, 0))
 
         time_slot = f"{start_time_input.strftime('%H:%M')}-{end_time_input.strftime('%H:%M')}"
 
@@ -147,13 +168,13 @@ with tab2:
                 overlap_info = ""
                 
                 if not df.empty and "予約日" in df.columns:
-                    target_date_df = df[df["予約日"] == str(date)]
+                    target_date_df = df[df["予約日"] == str(date_val)]
                     
                     for idx, row in target_date_df.iterrows():
                         try:
                             exist_start_str, exist_end_str = row["時間"].split("-")
-                            exist_start = datetime.datetime.strptime(exist_start_str.strip(), "%H:%M").time()
-                            exist_end = datetime.datetime.strptime(exist_end_str.strip(), "%H:%M").time()
+                            exist_start = datetime.strptime(exist_start_str.strip(), "%H:%M").time()
+                            exist_end = datetime.strptime(exist_end_str.strip(), "%H:%M").time()
                             
                             if (start_time_input < exist_end) and (end_time_input > exist_start):
                                 is_overlap = True
@@ -167,7 +188,7 @@ with tab2:
                 else:
                     payload = {
                         "name": name, 
-                        "date": str(date), 
+                        "date": str(date_val), 
                         "time_slot": time_slot,
                         "password": str(password)
                     }
