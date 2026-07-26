@@ -234,7 +234,7 @@ with tab2:
                             st.success("❌ 予約をキャンセルしました！")
                             st.rerun()
                         else:
-                            st.error(f"失敗: {response.text}")
+                            st.error(f": {response.text}")
                     except Exception as e:
                         st.error(f"通信エラー: {e}")
         else:
