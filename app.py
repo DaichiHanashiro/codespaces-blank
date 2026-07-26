@@ -251,6 +251,7 @@ with tab2:
         """
 
         calendar_options = {
+            "height": 800,  # ↕️ 縦幅をガッツリ伸ばして夜の時間帯まで見やすく！
             "initialView": "timeGridWeek",
             "headerToolbar": {
                 "left": "prev,next today",
