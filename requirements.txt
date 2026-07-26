@@ -1,0 +1,6 @@
+streamlit
+pandas
+requests
+qrcode
+pillow
+streamlit-calendar
