@@ -5,6 +5,7 @@ import requests
 import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
+import streamlit.components.v1 as components
 
 st.set_page_config(layout="wide")
 
@@ -29,30 +30,49 @@ except Exception as e:
     st.stop()
 
 
-# ─── 2. URLパラメータからの名前読み込み ───
+# ─── 2. URLパラメータ＆名前の永続記憶処理 ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-# セッション状態の更新
+# URLに名前があればセッションに保存
 if url_user:
     st.session_state["saved_user"] = url_user
 
 user_name = st.session_state.get("saved_user", "")
+
+# 📱 スマホのLocalStorage（ブラウザ記憶）と同期するためのHTML/JS
+js_code = f"""
+<script>
+    // URLに名前がある場合はLocalStorageに永久保存
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlUser = urlParams.get('user');
+    if (urlUser) {{
+        localStorage.setItem('studio_user_name', urlUser);
+    }}
+    
+    // LocalStorageから名前を取得して、なければ自動でURLに付加してリロード
+    const savedUser = localStorage.getItem('studio_user_name');
+    if (savedUser && !urlUser) {{
+        urlParams.set('user', savedUser);
+        window.location.search = urlParams.toString();
+    }}
+</script>
+"""
+components.html(js_code, height=0)
 
 
 # ⚡⚡⚡ 3. 【QR自動打刻判定】 ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
-    # 1️⃣ 名前がない場合（初回のみ入力）
+    # 1️⃣ スマホに名前が一切保存されていない場合（初回のみ）
     if not user_name:
-        st.info("💡 お名前を入力してください。（入力後、次回からの専用リンクが生成されます）")
+        st.info("💡 お名前を入力してください。（このスマホに自動記憶され、次回からQR読み取りだけで即打刻されます！）")
         input_name = st.text_input("お名前を入力してEnter")
         if input_name:
             clean_name = input_name.strip()
             st.session_state["saved_user"] = clean_name
-            # 名前入りのURLにして再読み込み
             st.query_params["action"] = auto_action
             st.query_params["user"] = clean_name
             st.rerun()
@@ -275,12 +295,13 @@ with tab2:
     
     if user_name:
         st.success(f"👤 **{user_name}** さんとして認識されています")
-        if st.button("お名前を変更する"):
+        if st.button("お名前を変更・リセットする"):
             st.session_state["saved_user"] = ""
             st.query_params.clear()
-            st.rerun()
+            # LocalStorageを削除するJavaScriptを実行
+            components.html("<script>localStorage.removeItem('studio_user_name'); window.location.href = window.location.pathname;</script>", height=0)
     else:
-        st.info("💡 お名前を入力すると、この画面で名前付きURLが保持されます。")
+        st.info("💡 お名前を入力すると、このスマホに永久記録されます。")
         input_name = st.text_input("お名前を入力")
         if input_name:
             clean_name = input_name.strip()
