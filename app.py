@@ -8,10 +8,50 @@ from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide")
 
-# URLパラメータを取得
+# ─── URLパラメータの取得（コードの上のほうで定義） ───
 query_params = st.query_params
-url_user = query_params.get("user", None)
-auto_action = query_params.get("action", None) # 自動打刻用 (checkin / checkout)
+auto_action = query_params.get("action", None)
+url_user = query_params.get("user", "")
+
+# ─── 端末での名前保持の処理 ───
+if "saved_user" not in st.session_state:
+    st.session_state["saved_user"] = url_user if url_user else ""
+
+user_name = st.session_state["saved_user"]
+
+# ⚡⚡⚡【超重要】タブの外で「QR自動打刻」を判定（一瞬で打刻させる） ───
+if auto_action in ["checkin", "checkout"]:
+    st.subheader("⚡ 自動打刻（入退室）")
+    
+    # 1️⃣ 名前がまだ端末にない場合（初回）
+    if not user_name:
+        st.info("💡 初めての方は、お名前を入力してください。（次回からこの端末に自動記憶され、QR読み取りだけで即打刻されます！）")
+        input_name = st.text_input("お名前を入力してEnter")
+        if input_name:
+            st.session_state["saved_user"] = input_name
+            st.query_params["user"] = input_name
+            st.rerun() # 名前を記憶して再読み込み
+    
+    # 2️⃣ 名前がある場合（自動打刻を実行！）
+    else:
+        if "auto_done" not in st.session_state:
+            st.session_state["auto_done"] = True
+            log_payload = {"action": auto_action, "name": user_name}
+            try:
+                res = requests.post(gas_url, json=log_payload)
+                if "Success" in res.text:
+                    status_label = "入室" if auto_action == "checkin" else "退室"
+                    st.balloons()
+                    st.success(f"🎉【{status_label}完了】{user_name} さんの打刻を記録しました！（{datetime.datetime.now().strftime('%H:%M')}）")
+                else:
+                    st.error(f"打刻エラー: {res.text}")
+            except Exception as e:
+                st.error(f"通信エラー: {e}")
+        else:
+            status_label = "入室" if auto_action == "checkin" else "退室"
+            st.success(f"✅ {user_name} さんの【{status_label}】は打刻済みです。")
+            
+        st.divider()
 
 st.title("スタジオ総合管理システム 🛡️📱")
 
