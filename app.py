@@ -28,29 +28,26 @@ except Exception as e:
     st.error(f"設定ファイルまたはデータの読み込みに失敗しました: {e}")
     st.stop()
 
-# URLパラメータ（QRコードの ?action=checkin 判定用）
+# URLパラメータ取得
 query_params = st.query_params
-auto_action = query_params.get("action", None)
+is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
 st.title("スタジオ総合管理システム 🛡️📱")
 
-# 🔀 タブ順変更：1番目を打刻、2番目を予約＆カレンダーに配置！
-tab1, tab2, tab3 = st.tabs(["🚪 打刻（入室・退室）", "📅 予約＆カレンダー", "🔲 壁貼り用QR作成"])
+# 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
+if is_admin:
+    tab1, tab2, tab3 = st.tabs(["🚪 打刻（入室・退室）", "📅 予約＆カレンダー", "🔲 壁貼り用QR作成（管理者）"])
+else:
+    tab1, tab2 = st.tabs(["🚪 打刻（入室・退室）", "📅 予約＆カレンダー"])
 
 
 # ─── タブ1：打刻画面（メイン） ───
 with tab1:
     st.subheader("📱 入退室打刻")
-    
-    if auto_action == "checkin":
-        st.info("💡 **【入室モード】** お名前を入力して「入室する」を押してください。")
-    elif auto_action == "checkout":
-        st.info("💡 **【退室モード】** お名前を入力して「退室する」を押してください。")
-    else:
-        st.write("お名前を入力して、入室または退室ボタンを押してください。")
+    st.write("お名前を入力（選択）して、入室または退室ボタンを押してください。")
 
-    # オートフィルが働きやすい標準的なテキスト入力欄
+    # オートフィル対応のテキスト入力欄
     user_name_input = st.text_input("お名前（タップすると候補が出ます）", key="main_user_name")
     
     st.divider()
@@ -58,9 +55,7 @@ with tab1:
     col_in, col_out = st.columns(2)
     
     with col_in:
-        # QRがcheckinだった場合はボタンを強調
-        btn_type = "primary" if auto_action == "checkin" or not auto_action else "secondary"
-        if st.button("🚪 入室する", use_container_width=True, type=btn_type):
+        if st.button("🚪 入室する", use_container_width=True, type="primary"):
             if user_name_input:
                 log_payload = {"action": "checkin", "name": user_name_input.strip()}
                 try:
@@ -76,8 +71,7 @@ with tab1:
                 st.warning("⚠️ お名前を入力してください。")
 
     with col_out:
-        btn_type = "primary" if auto_action == "checkout" else "secondary"
-        if st.button("🚪 退室する", use_container_width=True, type=btn_type):
+        if st.button("🚪 退室する", use_container_width=True):
             if user_name_input:
                 log_payload = {"action": "checkout", "name": user_name_input.strip()}
                 try:
@@ -279,21 +273,17 @@ with tab2:
         calendar(events=calendar_events, options=calendar_options, custom_css=calendar_css)
 
 
-# ─── タブ3：🔲 自動打刻用QRコード生成 ───
-with tab3:
-    st.subheader("🔲 壁貼り用 自動打刻QRコード作成")
-    st.write("部屋の入り口（入室用）と出口（退室用）に貼るQRコードを作成できます。")
-    
-    base_url = st.text_input("アプリのベースURL", value="https://mmc-studio.streamlit.app")
-    
-    col_qr1, col_qr2 = st.columns(2)
-    
-    with col_qr1:
-        st.markdown("### 🚪 入室専用QR")
-        if st.button("入室用QRを作成"):
-            qr_url = f"{base_url}?action=checkin"
+# ─── タブ3：🔲 自動打刻用QRコード生成（管理者専用） ───
+if is_admin:
+    with tab3:
+        st.subheader("🔲 壁貼り用 打刻QRコード作成（共通1枚）")
+        st.write("スタジオの壁に貼る打刻用の共通QRコードを作成します。")
+        
+        base_url = st.text_input("アプリのベースURL", value="https://mmc-studio.streamlit.app")
+        
+        if st.button("壁貼り用QRコードを作成"):
             qr = qrcode.QRCode(version=1, box_size=8, border=4)
-            qr.add_data(qr_url)
+            qr.add_data(base_url)
             qr.make(fit=True)
             img = qr.make_image(fill_color="black", back_color="white")
             
@@ -301,21 +291,5 @@ with tab3:
             img.save(buf, format="PNG")
             byte_im = buf.getvalue()
             
-            st.image(byte_im, caption="入室用QR", width=200)
-            st.download_button("📥 入室QRをダウンロード", data=byte_im, file_name="checkin_qr.png", mime="image/png")
-
-    with col_qr2:
-        st.markdown("### 🚪 退室専用QR")
-        if st.button("退室用QRを作成"):
-            qr_url = f"{base_url}?action=checkout"
-            qr = qrcode.QRCode(version=1, box_size=8, border=4)
-            qr.add_data(qr_url)
-            qr.make(fit=True)
-            img = qr.make_image(fill_color="black", back_color="white")
-            
-            buf = BytesIO()
-            img.save(buf, format="PNG")
-            byte_im = buf.getvalue()
-            
-            st.image(byte_im, caption="退室用QR", width=200)
-            st.download_button("📥 退室QRをダウンロード", data=byte_im, file_name="checkout_qr.png", mime="image/png")
+            st.image(byte_im, caption="スタジオ打刻用QR（共通）", width=220)
+            st.download_button("📥 QRコードをダウンロード", data=byte_im, file_name="studio_checkin_qr.png", mime="image/png")
