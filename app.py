@@ -219,7 +219,7 @@ with tab1:
                 "right": "timeGridWeek,timeGridDay,dayGridMonth"
             },
             "locale": "ja",
-            "slotMinTime": "08:00:00",
+            "slotMinTime": "00:00:00",
             "slotMaxTime": "24:00:00",
             "allDaySlot": False,
             # 💡 スマホの狭い画面でもタイトルが綺麗に収まるフォーマット
