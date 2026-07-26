@@ -174,42 +174,39 @@ with tab1:
     with col2:
         st.subheader("📅 予約カレンダー")
         
-        # 📱 スマホ表示のズレ・重なりを解消するカスタムCSS
-        st.markdown(
-            """
-            <style>
-            /* 1. ヘッダーボタンとタイトルが重ならないよう自動折返し */
+        # 📱 カレンダー内部に直接注入する専用CSS
+        calendar_css = """
+            /* 1. ヘッダーの要素（ボタンやタイトル）を折り返す */
             .fc-header-toolbar {
                 display: flex !important;
                 flex-wrap: wrap !important;
-                gap: 6px !important;
+                gap: 4px !important;
                 justify-content: space-between !important;
             }
-            /* 2. タイトルの文字サイズをスマホに合わせて最適化 */
+            /* 2. タイトルの文字サイズをスマホ向けに小さく */
             .fc-toolbar-title {
-                font-size: 1.0rem !important;
+                font-size: 0.95rem !important;
                 white-space: normal !important;
                 line-height: 1.2 !important;
             }
-            /* 3. ボタンのパディングを小さくしてコンパクト化 */
+            /* 3. ボタンを小さくコンパクトに */
             .fc-button {
-                padding: 0.25em 0.5em !important;
+                padding: 0.2em 0.4em !important;
                 font-size: 0.75rem !important;
             }
-            /* 4. 曜日ヘッダーの文字サイズと重なり防止 */
+            /* 4. 曜日の重なり防止（7/26(日)などの文字サイズ調整） */
             .fc-col-header-cell-cushion {
                 font-size: 0.7rem !important;
-                padding: 2px !important;
-                word-break: break-all !important;
+                padding: 2px 0 !important;
+                display: block !important;
+                text-align: center !important;
             }
-            /* 5. 縦の時刻ラベルの文字調整 */
-            .fc-timegrid-slot-label-frame {
-                font-size: 0.75rem !important;
+            /* 5. 縦の時刻ラベル（8時、9時など）を小さくして横幅を確保 */
+            .fc-timegrid-slot-label-cushion {
+                font-size: 0.7rem !important;
+                padding: 0 2px !important;
             }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+        """
 
         calendar_options = {
             "initialView": "timeGridWeek",
@@ -219,10 +216,9 @@ with tab1:
                 "right": "timeGridWeek,timeGridDay,dayGridMonth"
             },
             "locale": "ja",
-            "slotMinTime": "00:00:00",
+            "slotMinTime": "08:00:00",
             "slotMaxTime": "24:00:00",
             "allDaySlot": False,
-            # 💡 スマホの狭い画面でもタイトルが綺麗に収まるフォーマット
             "titleFormat": { "year": "numeric", "month": "short", "day": "numeric" },
             "buttonText": {
                 "today": "今日",
@@ -231,7 +227,9 @@ with tab1:
                 "day": "日"
             }
         }
-        calendar(events=calendar_events, options=calendar_options)
+        
+        # 💡 custom_css パラメータに直接CSSを渡します！
+        calendar(events=calendar_events, options=calendar_options, custom_css=calendar_css)
 
 # ─── タブ2：ワンタップ＆自動打刻（固定化・なりすまし防止版） ───
 with tab2:
