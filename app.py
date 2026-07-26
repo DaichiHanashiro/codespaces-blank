@@ -29,43 +29,41 @@ except Exception as e:
     st.stop()
 
 
-# ─── 2. URLパラメータと名前の記憶処理（一本化） ───
+# ─── 2. URLパラメータと名前の記憶処理（端末固定強化版） ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-# 端末（セッション＆URL）での名前保持ロジック
+# 端末（セッション）での名前保持初期化
 if "saved_user" not in st.session_state:
-    st.session_state["saved_user"] = url_user if url_user else ""
+    st.session_state["saved_user"] = ""
 
-# URLに名前があれば優先してセッションへ保存
-if url_user and not st.session_state["saved_user"]:
+# URLに名前が載っていれば、最優先で端末（セッション）に記憶させる
+if url_user:
     st.session_state["saved_user"] = url_user
 
+# 端末に記憶されている名前を取得
 user_name = st.session_state["saved_user"]
 
 
-# ⚡⚡⚡ 3. 【QR自動打刻判定】（タブの外で即時実行） ───
+# ⚡⚡⚡ 3. 【QR自動打刻判定】 ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
-    # 1️⃣ 名前がまだ端末にない場合（初回のみ）
+    # 1️⃣ 端末に名前の記憶が一切ない場合（初回のみ）
     if not user_name:
-        st.info("💡 初めての方は、お名前を入力してください。（次回からこの端末に自動記憶され、QR読み取りだけで即打刻されます！）")
+        st.info("💡 初めての方は、お名前を入力してください。（この端末に記憶され、次回からQR読み取りだけで即打刻されます！）")
         input_name = st.text_input("お名前を入力してEnter")
         if input_name:
             clean_name = input_name.strip()
             st.session_state["saved_user"] = clean_name
-            # パラメータと名前を保持した状態でURLを更新＆リロード
+            # URLに名前を付与して再読み込み
             st.query_params["action"] = auto_action
             st.query_params["user"] = clean_name
             st.rerun()
     
-    # 2️⃣ 名前がある場合（全自動打刻を実行！）
+    # 2️⃣ 端末に名前が記憶されている場合（即座に全自動打刻！）
     else:
-        # URLにも名前を保持させ続ける
-        st.query_params["user"] = user_name
-        
         if "auto_done" not in st.session_state:
             st.session_state["auto_done"] = True
             log_payload = {"action": auto_action, "name": user_name}
