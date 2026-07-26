@@ -8,7 +8,7 @@ from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide")
 
-# ─── 1. 設定・データの読み込み（一番最初に実行！） ───
+# ─── 1. 設定・データの読み込み ───
 try:
     sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
     gas_url = st.secrets["connections"]["gsheets"]["gas_url"]
@@ -29,34 +29,43 @@ except Exception as e:
     st.stop()
 
 
-# ─── 2. URLパラメータの取得 ───
+# ─── 2. URLパラメータと名前の記憶処理（一本化） ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-
-# ─── 3. 端末での名前保持の処理 ───
+# 端末（セッション＆URL）での名前保持ロジック
 if "saved_user" not in st.session_state:
     st.session_state["saved_user"] = url_user if url_user else ""
+
+# URLに名前があれば優先してセッションへ保存
+if url_user and not st.session_state["saved_user"]:
+    st.session_state["saved_user"] = url_user
 
 user_name = st.session_state["saved_user"]
 
 
-# ⚡⚡⚡ 4. 【QR自動打刻判定】（先にgas_urlが読み込まれているのでこれでエラーになりません！） ───
+# ⚡⚡⚡ 3. 【QR自動打刻判定】（タブの外で即時実行） ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
-    # 1️⃣ 名前がまだ端末にない場合（初回）
+    # 1️⃣ 名前がまだ端末にない場合（初回のみ）
     if not user_name:
         st.info("💡 初めての方は、お名前を入力してください。（次回からこの端末に自動記憶され、QR読み取りだけで即打刻されます！）")
         input_name = st.text_input("お名前を入力してEnter")
         if input_name:
-            st.session_state["saved_user"] = input_name
-            st.query_params["user"] = input_name
-            st.rerun() # 名前を記憶して再読み込み
+            clean_name = input_name.strip()
+            st.session_state["saved_user"] = clean_name
+            # パラメータと名前を保持した状態でURLを更新＆リロード
+            st.query_params["action"] = auto_action
+            st.query_params["user"] = clean_name
+            st.rerun()
     
-    # 2️⃣ 名前がある場合（自動打刻を実行！）
+    # 2️⃣ 名前がある場合（全自動打刻を実行！）
     else:
+        # URLにも名前を保持させ続ける
+        st.query_params["user"] = user_name
+        
         if "auto_done" not in st.session_state:
             st.session_state["auto_done"] = True
             log_payload = {"action": auto_action, "name": user_name}
@@ -81,7 +90,7 @@ st.title("スタジオ総合管理システム 🛡️📱")
 
 tab1, tab2, tab3 = st.tabs(["📅 予約＆カレンダー", "🚪 ワンタップ打刻", "🔲 壁貼り用QR作成"])
 
-# ─── タブ1：予約＆カレンダー画面（重複防止強化版） ───
+# ─── タブ1：予約＆カレンダー画面 ───
 with tab1:
     calendar_events = []
     if not df.empty:
@@ -126,7 +135,7 @@ with tab1:
         time_slot = f"{start_time_input.strftime('%H:%M')}-{end_time_input.strftime('%H:%M')}"
 
         with st.form("reserve_form"):
-            name = st.text_input("お名前")
+            name = st.text_input("お名前", value=user_name if user_name else "")
             password = st.text_input("キャンセル用暗証番号（4桁など）", type="password")
             submit = st.form_submit_button("予約する")
 
@@ -138,7 +147,6 @@ with tab1:
             elif not password:
                 st.error("暗証番号を入力してください。")
             else:
-                # 🔒 重複チェックロジック
                 is_overlap = False
                 overlap_info = ""
                 
@@ -218,34 +226,28 @@ with tab1:
     with col2:
         st.subheader("📅 予約カレンダー")
         
-        # 📱 カレンダー内部に直接注入する専用CSS
         calendar_css = """
-            /* 1. ヘッダーの要素（ボタンやタイトル）を折り返す */
             .fc-header-toolbar {
                 display: flex !important;
                 flex-wrap: wrap !important;
                 gap: 4px !important;
                 justify-content: space-between !important;
             }
-            /* 2. タイトルの文字サイズをスマホ向けに小さく */
             .fc-toolbar-title {
                 font-size: 0.95rem !important;
                 white-space: normal !important;
                 line-height: 1.2 !important;
             }
-            /* 3. ボタンを小さくコンパクトに */
             .fc-button {
                 padding: 0.2em 0.4em !important;
                 font-size: 0.75rem !important;
             }
-            /* 4. 曜日の重なり防止（7/26(日)などの文字サイズ調整） */
             .fc-col-header-cell-cushion {
                 font-size: 0.7rem !important;
                 padding: 2px 0 !important;
                 display: block !important;
                 text-align: center !important;
             }
-            /* 5. 縦の時刻ラベル（8時、9時など）を小さくして横幅を確保 */
             .fc-timegrid-slot-label-cushion {
                 font-size: 0.7rem !important;
                 padding: 0 2px !important;
@@ -272,45 +274,24 @@ with tab1:
             }
         }
         
-        # 💡 custom_css パラメータに直接CSSを渡します！
         calendar(events=calendar_events, options=calendar_options, custom_css=calendar_css)
 
-# ─── タブ2：ワンタップ＆自動打刻（固定化・なりすまし防止版） ───
+# ─── タブ2：ワンタップ手動打刻（画面からの手動打刻用） ───
 with tab2:
-    st.subheader("📱 入退室打刻")
+    st.subheader("📱 入退室打刻（手動）")
     
-    if "saved_user" not in st.session_state:
-        st.session_state["saved_user"] = url_user if url_user else ""
-
-    if st.session_state["saved_user"]:
-        user_name = st.session_state["saved_user"]
+    if user_name:
         st.success(f"👤 **{user_name}** さんとして認識されています")
     else:
-        st.info("💡 初めての方は、お名前を入力してください。（この端末に自動記憶されます）")
+        st.info("💡 お名前を入力して登録すると、この端末に自動記憶されます。")
         input_name = st.text_input("お名前を入力")
         if input_name:
-            user_name = input_name
-            st.session_state["saved_user"] = input_name
-            st.query_params["user"] = input_name
-        else:
-            user_name = ""
+            user_name = input_name.strip()
+            st.session_state["saved_user"] = user_name
+            st.query_params["user"] = user_name
+            st.rerun()
 
     st.divider()
-
-    # ⚡ QRコード読み込み時の自動打刻処理
-    if auto_action and user_name and "auto_done" not in st.session_state:
-        st.session_state["auto_done"] = True
-        log_payload = {"action": auto_action, "name": user_name}
-        try:
-            res = requests.post(gas_url, json=log_payload)
-            if "Success" in res.text:
-                status_label = "入室" if auto_action == "checkin" else "退室"
-                st.balloons()
-                st.success(f"⚡ QR読み取り完了！{user_name} さんの【{status_label}】を自動打刻しました！")
-            else:
-                st.error(f"打刻エラー: {res.text}")
-        except Exception as e:
-            st.error(f"通信エラー: {e}")
 
     col_in, col_out = st.columns(2)
     with col_in:
@@ -349,7 +330,8 @@ with tab3:
     st.subheader("🔲 壁貼り用 自動打刻QRコード作成")
     st.write("部屋の入り口（入室用）と出口（退室用）に貼るQRコードを作成できます。")
     
-    base_url = st.text_input("アプリのベースURL（公開後のURLを入力してください）", value="https://your-app-url.streamlit.app")
+    # 既存のアプリURLをデフォルトでセット
+    base_url = st.text_input("アプリのベースURL", value="https://mmc-studio.streamlit.app")
     
     col_qr1, col_qr2 = st.columns(2)
     
