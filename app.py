@@ -189,7 +189,7 @@ with tab2:
             
             with st.form("cancel_form"):
                 selected_cancel = st.selectbox("キャンセルする予約", cancel_options)
-                input_password = st.text_input("予約時のパスワード", type="password")
+                input_password = st.text_input("キャンセル用パスワード", type="password")
                 cancel_submit = st.form_submit_button("この予約をキャンセル")
                 
             if cancel_submit:
