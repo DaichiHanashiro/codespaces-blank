@@ -8,18 +8,41 @@ from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide")
 
-# ─── URLパラメータの取得（コードの上のほうで定義） ───
+# ─── 1. 設定・データの読み込み（一番最初に実行！） ───
+try:
+    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
+    gas_url = st.secrets["connections"]["gsheets"]["gas_url"]
+    csv_url = sheet_url.replace("/edit?usp=sharing", "/gviz/tq?tqx=out:csv").replace("/edit", "/gviz/tq?tqx=out:csv")
+    
+    df = pd.read_csv(csv_url, dtype=str)
+    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+
+    if len(df.columns) >= 3:
+        if len(df.columns) == 3:
+            df.columns = ["名前", "予約日", "時間帯"]
+            df["パスワード"] = ""
+        else:
+            df = df.iloc[:, :4]
+            df.columns = ["名前", "予約日", "時間帯", "パスワード"]
+except Exception as e:
+    st.error(f"設定ファイルまたはデータの読み込みに失敗しました: {e}")
+    st.stop()
+
+
+# ─── 2. URLパラメータの取得 ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-# ─── 端末での名前保持の処理 ───
+
+# ─── 3. 端末での名前保持の処理 ───
 if "saved_user" not in st.session_state:
     st.session_state["saved_user"] = url_user if url_user else ""
 
 user_name = st.session_state["saved_user"]
 
-# ⚡⚡⚡【超重要】タブの外で「QR自動打刻」を判定（一瞬で打刻させる） ───
+
+# ⚡⚡⚡ 4. 【QR自動打刻判定】（先にgas_urlが読み込まれているのでこれでエラーになりません！） ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
@@ -53,29 +76,10 @@ if auto_action in ["checkin", "checkout"]:
             
         st.divider()
 
+
 st.title("スタジオ総合管理システム 🛡️📱")
 
 tab1, tab2, tab3 = st.tabs(["📅 予約＆カレンダー", "🚪 ワンタップ打刻", "🔲 壁貼り用QR作成"])
-
-# 1. データの読み込み
-try:
-    sheet_url = st.secrets["connections"]["gsheets"]["spreadsheet"]
-    gas_url = st.secrets["connections"]["gsheets"]["gas_url"]
-    csv_url = sheet_url.replace("/edit?usp=sharing", "/gviz/tq?tqx=out:csv").replace("/edit", "/gviz/tq?tqx=out:csv")
-    
-    df = pd.read_csv(csv_url, dtype=str)
-    df = df.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
-
-    if len(df.columns) >= 3:
-        if len(df.columns) == 3:
-            df.columns = ["名前", "予約日", "時間帯"]
-            df["パスワード"] = ""
-        else:
-            df = df.iloc[:, :4]
-            df.columns = ["名前", "予約日", "時間帯", "パスワード"]
-except Exception as e:
-    st.error(f"設定ファイルまたはデータの読み込みに失敗しました: {e}")
-    st.stop()
 
 # ─── タブ1：予約＆カレンダー画面（重複防止強化版） ───
 with tab1:
