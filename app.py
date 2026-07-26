@@ -5,8 +5,12 @@ import requests
 import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
+import extra_streamlit_components as stx  # 🍪 Cookie管理用ライブラリ
 
 st.set_page_config(layout="wide")
+
+# ─── Cookieマネージャーの初期化 ───
+cookie_manager = stx.get_cookie_manager()
 
 # ─── 1. 設定・データの読み込み ───
 try:
@@ -29,40 +33,43 @@ except Exception as e:
     st.stop()
 
 
-# ─── 2. URLパラメータと名前の記憶処理（端末固定強化版） ───
+# ─── 2. Cookie & URLパラメータからの名前読み込み（端末永久保存） ───
 query_params = st.query_params
 auto_action = query_params.get("action", None)
 url_user = query_params.get("user", "")
 
-# 端末（セッション）での名前保持初期化
-if "saved_user" not in st.session_state:
-    st.session_state["saved_user"] = ""
+# 🍪 スマホのCookieから保存された名前を取得
+saved_cookie_user = cookie_manager.get(cookie="studio_user_name")
 
-# URLに名前が載っていれば、最優先で端末（セッション）に記憶させる
+# 優先順位: URLパラメータ > Cookie > セッション
 if url_user:
-    st.session_state["saved_user"] = url_user
+    user_name = url_user
+    cookie_manager.set("studio_user_name", url_user, expires_at=datetime.datetime(2030, 1, 1))
+elif saved_cookie_user:
+    user_name = saved_cookie_user
+else:
+    user_name = st.session_state.get("saved_user", "")
 
-# 端末に記憶されている名前を取得
-user_name = st.session_state["saved_user"]
+st.session_state["saved_user"] = user_name
 
 
 # ⚡⚡⚡ 3. 【QR自動打刻判定】 ───
 if auto_action in ["checkin", "checkout"]:
     st.subheader("⚡ 自動打刻（入退室）")
     
-    # 1️⃣ 端末に名前の記憶が一切ない場合（初回のみ）
+    # 1️⃣ Cookieにも名前が無い場合（本当の初回）
     if not user_name:
-        st.info("💡 初めての方は、お名前を入力してください。（この端末に記憶され、次回からQR読み取りだけで即打刻されます！）")
+        st.info("💡 初めての方は、お名前を入力してください。（このスマホに永久記憶され、次回からQR読み取りだけで即打刻されます！）")
         input_name = st.text_input("お名前を入力してEnter")
         if input_name:
             clean_name = input_name.strip()
+            # 🍪 Cookieに2030年まで名前を保存！
+            cookie_manager.set("studio_user_name", clean_name, expires_at=datetime.datetime(2030, 1, 1))
             st.session_state["saved_user"] = clean_name
-            # URLに名前を付与して再読み込み
             st.query_params["action"] = auto_action
-            st.query_params["user"] = clean_name
             st.rerun()
     
-    # 2️⃣ 端末に名前が記憶されている場合（即座に全自動打刻！）
+    # 2️⃣ 名前がある場合（全自動で爆速打刻！）
     else:
         if "auto_done" not in st.session_state:
             st.session_state["auto_done"] = True
@@ -274,19 +281,23 @@ with tab1:
         
         calendar(events=calendar_events, options=calendar_options, custom_css=calendar_css)
 
-# ─── タブ2：ワンタップ手動打刻（画面からの手動打刻用） ───
+# ─── タブ2：ワンタップ手動打刻 ───
 with tab2:
     st.subheader("📱 入退室打刻（手動）")
     
     if user_name:
         st.success(f"👤 **{user_name}** さんとして認識されています")
+        if st.button("別の名前で登録し直す"):
+            cookie_manager.delete("studio_user_name")
+            st.session_state["saved_user"] = ""
+            st.rerun()
     else:
-        st.info("💡 お名前を入力して登録すると、この端末に自動記憶されます。")
+        st.info("💡 お名前を入力して登録すると、このスマホに永久記憶されます。")
         input_name = st.text_input("お名前を入力")
         if input_name:
-            user_name = input_name.strip()
-            st.session_state["saved_user"] = user_name
-            st.query_params["user"] = user_name
+            clean_name = input_name.strip()
+            cookie_manager.set("studio_user_name", clean_name, expires_at=datetime.datetime(2030, 1, 1))
+            st.session_state["saved_user"] = clean_name
             st.rerun()
 
     st.divider()

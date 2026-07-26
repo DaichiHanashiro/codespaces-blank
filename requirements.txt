@@ -4,3 +4,4 @@ requests
 qrcode
 pillow
 streamlit-calendar
+extra-streamlit-components
