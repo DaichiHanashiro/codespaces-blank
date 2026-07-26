@@ -33,7 +33,7 @@ query_params = st.query_params
 is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
-st.title("スタジオ総合管理システム 🛡️📱")
+st.title("MMCスタジオ管理システム")
 
 # 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
 if is_admin:
@@ -45,10 +45,10 @@ else:
 # ─── タブ1：打刻画面（メイン） ───
 with tab1:
     st.subheader("📱 入退室打刻")
-    st.write("お名前を入力（選択）して、入室または退室ボタンを押してください。")
+    st.write("名前を入力して、入室または退室ボタンを押してください。")
 
     # オートフィル対応のテキスト入力欄
-    user_name_input = st.text_input("お名前（タップすると候補が出ます）", key="main_user_name")
+    user_name_input = st.text_input("名前", key="main_user_name")
     
     st.divider()
 
@@ -68,7 +68,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"通信エラー: {e}")
             else:
-                st.warning("⚠️ お名前を入力してください。")
+                st.warning("⚠️ 名前を入力してください。")
 
     with col_out:
         if st.button("🚪 退室する", use_container_width=True):
@@ -83,7 +83,7 @@ with tab1:
                 except Exception as e:
                     st.error(f"通信エラー: {e}")
             else:
-                st.warning("⚠️ お名前を入力してください。")
+                st.warning("⚠️ 名前を入力してください。")
 
 
 # ─── タブ2：予約＆カレンダー画面 ───
@@ -131,8 +131,8 @@ with tab2:
         time_slot = f"{start_time_input.strftime('%H:%M')}-{end_time_input.strftime('%H:%M')}"
 
         with st.form("reserve_form"):
-            name = st.text_input("お名前")
-            password = st.text_input("キャンセル用暗証番号（4桁など）", type="password")
+            name = st.text_input("名前")
+            password = st.text_input("キャンセル用パスワード", type="password")
             submit = st.form_submit_button("予約する")
 
         if submit:
@@ -141,7 +141,7 @@ with tab2:
             elif not name:
                 st.error("名前を入力してください。")
             elif not password:
-                st.error("暗証番号を入力してください。")
+                st.error("パスワードを入力してください。")
             else:
                 is_overlap = False
                 overlap_info = ""
@@ -151,19 +151,19 @@ with tab2:
                     
                     for idx, row in target_date_df.iterrows():
                         try:
-                            exist_start_str, exist_end_str = row["時間帯"].split("-")
+                            exist_start_str, exist_end_str = row["時間"].split("-")
                             exist_start = datetime.datetime.strptime(exist_start_str.strip(), "%H:%M").time()
                             exist_end = datetime.datetime.strptime(exist_end_str.strip(), "%H:%M").time()
                             
                             if (start_time_input < exist_end) and (end_time_input > exist_start):
                                 is_overlap = True
-                                overlap_info = f"{row['名前']} さんの予約 ({row['時間帯']})"
+                                overlap_info = f"{row['名前']} さんの予約 ({row['時間']})"
                                 break
                         except Exception:
                             continue
                 
                 if is_overlap:
-                    st.error(f"❌ 選択した時間帯は既に予約が入っています！\n重複: {overlap_info}")
+                    st.error(f"❌ 選択した時間は既に予約が入っています！\n重複: {overlap_info}")
                 else:
                     payload = {
                         "name": name, 
@@ -185,16 +185,16 @@ with tab2:
 
         st.subheader("❌ 予約のキャンセル")
         if not df.empty:
-            cancel_options = [f"{row['名前']} さんの予約 ({row['予約日']} : {row['時間帯']})" for index, row in df.iterrows()]
+            cancel_options = [f"{row['名前']} さんの予約 ({row['予約日']} : {row['時間']})" for index, row in df.iterrows()]
             
             with st.form("cancel_form"):
-                selected_cancel = st.selectbox("キャンセルする予定", cancel_options)
-                input_password = st.text_input("予約時の暗証番号", type="password")
+                selected_cancel = st.selectbox("キャンセルする予約", cancel_options)
+                input_password = st.text_input("予約時のパスワード", type="password")
                 cancel_submit = st.form_submit_button("この予約をキャンセル")
                 
             if cancel_submit:
                 if not input_password:
-                    st.error("暗証番号を入力してください。")
+                    st.error("パスワードを入力してください。")
                 else:
                     opt_index = cancel_options.index(selected_cancel)
                     target_row = df.iloc[opt_index]
@@ -203,7 +203,7 @@ with tab2:
                         "action": "cancel",
                         "name": str(target_row["名前"]),
                         "date": str(target_row["予約日"]),
-                        "time_slot": str(target_row["時間帯"]),
+                        "time_slot": str(target_row["時間"]),
                         "password": str(input_password)
                     }
                     
