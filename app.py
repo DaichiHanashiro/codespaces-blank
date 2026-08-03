@@ -6,7 +6,16 @@ import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
 
-st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
+st.set_page_config(layout="wide", page_title="スタジオ管理システムtest", page_icon="🚪")
+
+# 📱 スマホでドロップダウン時にキーボードが勝手に出てくるのを防ぐCSS
+st.markdown("""
+    <style>
+    .stSelectbox input {
+        pointer-events: none;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # 🇯🇵 日本標準時（JST = UTC+9）の定義
 JST = timezone(timedelta(hours=9))
