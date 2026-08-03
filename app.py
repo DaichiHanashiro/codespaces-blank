@@ -6,10 +6,21 @@ import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
 
-st.set_page_config(layout="wide", page_title="スタジオ管理システムtest", page_icon="🚪")
+st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
 
 # 🇯🇵 日本標準時（JST = UTC+9）の定義
 JST = timezone(timedelta(hours=9))
+
+# 📱 ボタン（pills）をスマホで見やすく整えるCSS
+st.markdown("""
+    <style>
+    /* pillsボタンの横幅と余白をスマホ用に最適化 */
+    div[data-testid="stPills"] > div {
+        flex-wrap: wrap !important;
+        gap: 6px !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 # ─── 1. 設定・データの読み込み ───
 try:
@@ -146,43 +157,67 @@ with tab2:
         today_jst = datetime.now(JST).date()
         date_val = st.date_input("予約日", today_jst, key="res_date")
         
-        # ⏰ よく使う時間を厳選（スッキリ表示用）
-        common_times = [
-            "08:00", "09:00", "10:00", "11:00", "12:00", 
-            "13:00", "14:00", "15:00", "16:00", "17:00", 
-            "18:00", "19:00", "20:00", "21:00", "22:00"
-        ]
+        # 📱 3ステップ・ボタンタップ選択（時・分・利用時間）
+        st.write("① **開始（時）**")
+        start_hour_str = st.pills(
+            "開始（時）", 
+            [f"{h:02d}時" for h in range(8, 24)], 
+            selection_mode="single", 
+            default="09時", 
+            key="pills_hour",
+            label_visibility="collapsed"
+        )
+        if not start_hour_str:
+            start_hour_str = "09時"
+
+        st.write("② **開始（分）**")
+        start_min_str = st.pills(
+            "開始（分）", 
+            ["00分", "15分", "30分", "45分"], 
+            selection_mode="single", 
+            default="00分", 
+            key="pills_min",
+            label_visibility="collapsed"
+        )
+        if not start_min_str:
+            start_min_str = "00分"
+
+        st.write("③ **利用時間**")
+        duration_dict = {
+            "30分": 30,
+            "45分": 45,
+            "1時間": 60,
+            "1.5時間": 90,
+            "2時間": 120,
+            "2.5時間": 150,
+            "3時間": 180
+        }
+        selected_duration_label = st.pills(
+            "利用時間", 
+            list(duration_dict.keys()), 
+            selection_mode="single", 
+            default="1時間", 
+            key="pills_dur",
+            label_visibility="collapsed"
+        )
+        if not selected_duration_label:
+            selected_duration_label = "1時間"
+
+        # 🧮 開始時刻と終了時刻を自動計算！
+        s_h = int(start_hour_str.replace("時", ""))
+        s_m = int(start_min_str.replace("分", ""))
+        start_time_str = f"{s_h:02d}:{s_m:02d}"
+
+        # 終了時間の計算（2026年の仮日付で計算）
+        start_dt = datetime(2026, 1, 1, s_h, s_m)
+        end_dt = start_dt + timedelta(minutes=duration_dict[selected_duration_label])
         
-        st.write("⏰ **開始時刻を選択**")
-        start_time_str = st.pills(
-            "開始時刻", 
-            common_times, 
-            selection_mode="single", 
-            default="09:00", 
-            key="pills_start",
-            label_visibility="collapsed"
-        )
-        if not start_time_str:
-            start_time_str = "09:00"
+        if end_dt.day > 1 or (end_dt.hour == 0 and end_dt.minute == 0 and duration_dict[selected_duration_label] > 0):
+            end_time_str = "24:00"
+        else:
+            end_time_str = end_dt.strftime("%H:%M")
 
-        st.write("⏰ **終了時刻を選択**")
-        common_end_times = [
-            "09:00", "10:00", "11:00", "12:00", "13:00", 
-            "14:00", "15:00", "16:00", "17:00", "18:00", 
-            "19:00", "20:00", "21:00", "22:00", "23:00", "24:00"
-        ]
-        end_time_str = st.pills(
-            "終了時刻", 
-            common_end_times, 
-            selection_mode="single", 
-            default="10:00", 
-            key="pills_end",
-            label_visibility="collapsed"
-        )
-        if not end_time_str:
-            end_time_str = "10:00"
-
-        st.info(f"選択中の時間: **{start_time_str} 〜 {end_time_str}**")
+        st.info(f"💡 選択中の予約枠: **{start_time_str} 〜 {end_time_str}** （{selected_duration_label}）")
         time_slot = f"{start_time_str}-{end_time_str}"
 
         # 📝 予約フォーム
