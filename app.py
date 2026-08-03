@@ -8,25 +8,6 @@ from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
 
-# 📱 スマホで絶対にキーボードを立ち上げさせない最強CSS
-st.markdown("""
-    <style>
-    /* selectboxやdate_input内部のテキスト入力部分へのフォーカスを強制無効化 */
-    div[data-baseweb="select"] input,
-    div[data-baseweb="input"] input[aria-expanded="true"],
-    .stSelectbox input,
-    .stDateInput input {
-        inputmode: none !important;
-        pointer-events: none !important;
-    }
-    /* スマホでタップした時のハイライト青枠を消す */
-    div[data-baseweb="select"] {
-        -webkit-user-select: none;
-        user-select: none;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # 🇯🇵 日本標準時（JST = UTC+9）の定義
 JST = timezone(timedelta(hours=9))
 
@@ -55,7 +36,7 @@ query_params = st.query_params
 is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
-st.title("MMCスタジオ管理システムtest")
+st.title("MMCスタジオ管理システム")
 
 # 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
 if is_admin:
@@ -165,7 +146,7 @@ with tab2:
         today_jst = datetime.now(JST).date()
         date_val = st.date_input("予約日", today_jst, key="res_date")
         
-        # ⏰ 15分刻みの時刻リストを作成（24:00まで対応）
+        # ⏰ 15分刻みの時刻リスト（24:00まで対応）
         time_options = []
         for h in range(25):
             for m in (0, 15, 30, 45):
@@ -173,15 +154,17 @@ with tab2:
                     break
                 time_options.append(f"{h:02d}:{m:02d}")
 
-        col_start, col_end = st.columns(2)
-        with col_start:
-            start_time_str = st.selectbox("開始時刻", time_options, index=36, key="start_select") # 09:00
-        with col_end:
-            end_time_str = st.selectbox("終了時刻", time_options, index=40, key="end_select")   # 10:00
+        # 📱 スマホキーボード対策：スライダー式選択（絶対キーボードが出ない！）
+        start_time_str, end_time_str = st.select_slider(
+            "予約時間帯（開始〜終了）を選択してください",
+            options=time_options,
+            value=("09:00", "10:00")
+        )
 
+        st.caption(f"選択中の時間: **{start_time_str} 〜 {end_time_str}**")
         time_slot = f"{start_time_str}-{end_time_str}"
 
-        # 📝 予約フォーム（復活・修正部分！）
+        # 📝 予約フォーム
         with st.form("reserve_form"):
             name = st.text_input("名前")
             password = st.text_input("キャンセル用パスワード", type="password")
