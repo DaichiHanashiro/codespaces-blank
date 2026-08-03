@@ -361,7 +361,7 @@ with tab2:
         """
 
         calendar_options = {
-            "height": 800,
+            "height": 420,
             "initialView": "timeGridWeek",
             "headerToolbar": {
                 "left": "prev,next today",
