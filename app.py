@@ -6,13 +6,23 @@ import qrcode
 from io import BytesIO
 from streamlit_calendar import calendar
 
-st.set_page_config(layout="wide", page_title="スタジオ管理システムtest", page_icon="🚪")
+st.set_page_config(layout="wide", page_title="スタジオ管理システム", page_icon="🚪")
 
-# 📱 スマホでドロップダウン時にキーボードが勝手に出てくるのを防ぐCSS
+# 📱 スマホで絶対にキーボードを立ち上げさせない最強CSS
 st.markdown("""
     <style>
-    .stSelectbox input {
-        pointer-events: none;
+    /* selectboxやdate_input内部のテキスト入力部分へのフォーカスを強制無効化 */
+    div[data-baseweb="select"] input,
+    div[data-baseweb="input"] input[aria-expanded="true"],
+    .stSelectbox input,
+    .stDateInput input {
+        inputmode: none !important;
+        pointer-events: none !important;
+    }
+    /* スマホでタップした時のハイライト青枠を消す */
+    div[data-baseweb="select"] {
+        -webkit-user-select: none;
+        user-select: none;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -45,7 +55,7 @@ query_params = st.query_params
 is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
-st.title("MMCスタジオ管理システム")
+st.title("MMCスタジオ管理システムtest")
 
 # 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
 if is_admin:
@@ -153,8 +163,6 @@ with tab2:
     with col1:
         st.subheader("📝 新規予約")
         today_jst = datetime.now(JST).date()
-        
-        # 📱 スマホ対策①：カレンダー入力（キーボード非表示のため、日付選択をわかりやすく）
         date_val = st.date_input("予約日", today_jst, key="res_date")
         
         # ⏰ 15分刻みの時刻リストを作成（24:00まで対応）
@@ -165,32 +173,82 @@ with tab2:
                     break
                 time_options.append(f"{h:02d}:{m:02d}")
 
-        # 📱 スマホ対策②：st.selectboxでキーボードが出ないよう「直接タップ選択」に最適化
-        # indexで初期値を設定し、プレースホルダーからのキーボード立ち上がりを抑止
         col_start, col_end = st.columns(2)
         with col_start:
-            start_time_str = st.selectbox(
-                "開始時刻", 
-                time_options, 
-                index=36, # 09:00
-                key="start_select"
-            )
+            start_time_str = st.selectbox("開始時刻", time_options, index=36, key="start_select") # 09:00
         with col_end:
-            end_time_str = st.selectbox(
-                "終了時刻", 
-                time_options, 
-                index=40, # 10:00
-                key="end_select"
-            )
+            end_time_str = st.selectbox("終了時刻", time_options, index=40, key="end_select")   # 10:00
 
         time_slot = f"{start_time_str}-{end_time_str}"
 
-        # 🔍 キャンセル機能の改善（検索フィルター付き）
+        # 📝 予約フォーム（復活・修正部分！）
+        with st.form("reserve_form"):
+            name = st.text_input("名前")
+            password = st.text_input("キャンセル用パスワード", type="password")
+            submit = st.form_submit_button("予約する", use_container_width=True)
+
+        if submit:
+            # 文字列から時刻比較用の分（minutes）に変換
+            s_h, s_m = map(int, start_time_str.split(":"))
+            e_h, e_m = map(int, end_time_str.split(":"))
+            start_minutes = s_h * 60 + s_m
+            end_minutes = e_h * 60 + e_m
+
+            if start_minutes >= end_minutes:
+                st.error("終了時刻は開始時刻より後の時間に設定してください。")
+            elif not name:
+                st.error("名前を入力してください。")
+            elif not password:
+                st.error("パスワードを入力してください。")
+            else:
+                is_overlap = False
+                overlap_info = ""
+                
+                if not df.empty and "予約日" in df.columns:
+                    target_date_df = df[df["予約日"] == str(date_val)]
+                    
+                    for idx, row in target_date_df.iterrows():
+                        try:
+                            exist_start_str, exist_end_str = row["時間"].split("-")
+                            ex_s_h, ex_s_m = map(int, exist_start_str.strip().split(":"))
+                            ex_e_h, ex_e_m = map(int, exist_end_str.strip().split(":"))
+                            
+                            exist_start_m = ex_s_h * 60 + ex_s_m
+                            exist_end_m = ex_e_h * 60 + ex_e_m
+                            
+                            if (start_minutes < exist_end_m) and (end_minutes > exist_start_m):
+                                is_overlap = True
+                                overlap_info = f"{row['名前']} さんの予約 ({row['時間']})"
+                                break
+                        except Exception:
+                            continue
+                
+                if is_overlap:
+                    st.error(f"❌ 選択した時間は既に予約が入っています！\n重複: {overlap_info}")
+                else:
+                    payload = {
+                        "name": name, 
+                        "date": str(date_val), 
+                        "time_slot": time_slot,
+                        "password": str(password)
+                    }
+                    try:
+                        response = requests.post(gas_url, json=payload)
+                        if response.text == "Success":
+                            st.success(f"🎉 {name}さんの予約完了！（{time_slot}）")
+                            st.rerun()
+                        else:
+                            st.error(f"書き込み失敗: {response.text}")
+                    except Exception as e:
+                        st.error(f"通信エラー: {e}")
+
+        st.divider()
+
+        # 🔍 キャンセル機能（検索フィルター付き）
         st.subheader("❌ 予約のキャンセル")
         if not df.empty:
             search_name = st.text_input("🔍 名前で予約を検索（部分一致）", placeholder="名前を入力して絞り込み...")
 
-            # 絞り込み処理
             filtered_df = df.copy()
             if search_name:
                 filtered_df = filtered_df[filtered_df["名前"].str.contains(search_name.strip(), na=False)]
@@ -201,7 +259,7 @@ with tab2:
                 with st.form("cancel_form"):
                     selected_cancel = st.selectbox("キャンセルする予約を選択", cancel_options)
                     input_password = st.text_input("キャンセル用パスワード", type="password")
-                    cancel_submit = st.form_submit_button("この予約をキャンセル")
+                    cancel_submit = st.form_submit_button("この予約をキャンセル", use_container_width=True)
                     
                 if cancel_submit:
                     if not input_password:
