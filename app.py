@@ -36,7 +36,7 @@ query_params = st.query_params
 is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
-st.title("MMCスタジオ管理システム")
+st.title("MMCスタジオ管理システムtest")
 
 # 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
 if is_admin:
@@ -146,45 +146,43 @@ with tab2:
         today_jst = datetime.now(JST).date()
         date_val = st.date_input("予約日", today_jst, key="res_date")
         
-        # ⏰ 15分刻みの時刻リスト
-        start_options = []
-        for h in range(24):
-            for m in (0, 15, 30, 45):
-                start_options.append(f"{h:02d}:{m:02d}")
-
-        # 📱 ボタンタップ式①：開始時刻をボタン/ピルで選択
+        # ⏰ よく使う時間を厳選（スッキリ表示用）
+        common_times = [
+            "08:00", "09:00", "10:00", "11:00", "12:00", 
+            "13:00", "14:00", "15:00", "16:00", "17:00", 
+            "18:00", "19:00", "20:00", "21:00", "22:00"
+        ]
+        
         st.write("⏰ **開始時刻を選択**")
-        start_time_str = st.pills("開始時刻", start_options, selection_mode="single", default="09:00", label_visibility="collapsed")
+        start_time_str = st.pills(
+            "開始時刻", 
+            common_times, 
+            selection_mode="single", 
+            default="09:00", 
+            key="pills_start",
+            label_visibility="collapsed"
+        )
         if not start_time_str:
             start_time_str = "09:00"
 
-        # 📱 ボタンタップ式②：利用時間を選択（自動計算）
-        st.write("⏳ **利用時間を選択**")
-        duration_options = {
-            "30分": 30,
-            "1時間": 60,
-            "1.5時間": 90,
-            "2時間": 120,
-            "2.5時間": 150,
-            "3時間": 180,
-            "4時間": 240
-        }
-        selected_duration_label = st.pills("利用時間", list(duration_options.keys()), selection_mode="single", default="1時間", label_visibility="collapsed")
-        if not selected_duration_label:
-            selected_duration_label = "1時間"
+        st.write("⏰ **終了時刻を選択**")
+        common_end_times = [
+            "09:00", "10:00", "11:00", "12:00", "13:00", 
+            "14:00", "15:00", "16:00", "17:00", "18:00", 
+            "19:00", "20:00", "21:00", "22:00", "23:00", "24:00"
+        ]
+        end_time_str = st.pills(
+            "終了時刻", 
+            common_end_times, 
+            selection_mode="single", 
+            default="10:00", 
+            key="pills_end",
+            label_visibility="collapsed"
+        )
+        if not end_time_str:
+            end_time_str = "10:00"
 
-        # 開始時刻 ＋ 利用時間 から 終了時刻を自動算出！
-        s_h, s_m = map(int, start_time_str.split(":"))
-        start_dt = datetime(2026, 1, 1, s_h, s_m)
-        end_dt = start_dt + timedelta(minutes=duration_options[selected_duration_label])
-        
-        # 24時越えの対応
-        if end_dt.day > 1 or (end_dt.hour == 0 and end_dt.minute == 0 and duration_options[selected_duration_label] > 0):
-            end_time_str = "24:00"
-        else:
-            end_time_str = end_dt.strftime("%H:%M")
-
-        st.info(f"💡 予約枠: **{start_time_str} 〜 {end_time_str}** （{selected_duration_label}）")
+        st.info(f"選択中の時間: **{start_time_str} 〜 {end_time_str}**")
         time_slot = f"{start_time_str}-{end_time_str}"
 
         # 📝 予約フォーム
@@ -194,8 +192,10 @@ with tab2:
             submit = st.form_submit_button("予約する", use_container_width=True)
 
         if submit:
-            start_minutes = s_h * 60 + s_m
+            s_h, s_m = map(int, start_time_str.split(":"))
             e_h, e_m = (24, 0) if end_time_str == "24:00" else map(int, end_time_str.split(":"))
+            
+            start_minutes = s_h * 60 + s_m
             end_minutes = e_h * 60 + e_m
 
             if start_minutes >= end_minutes:
