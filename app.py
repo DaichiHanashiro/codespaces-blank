@@ -8,17 +8,6 @@ from streamlit_calendar import calendar
 
 st.set_page_config(layout="wide", page_title="スタジオ管理システムtest", page_icon="🚪")
 
-# 📱 スマホキーボード無効化CSS（selectboxの入力部分だけをピンポイントブロック）
-st.markdown("""
-    <style>
-    /* selectbox内部のテキスト検索入力だけを読み取り専用＆タッチ無効にする */
-    div[data-baseweb="select"] input {
-        inputmode: none !important;
-        pointer-events: none !important;
-    }
-    </style>
-""", unsafe_allow_html=True)
-
 # 🇯🇵 日本標準時（JST = UTC+9）の定義
 JST = timezone(timedelta(hours=9))
 
@@ -47,7 +36,7 @@ query_params = st.query_params
 is_admin = query_params.get("admin", None) == "true"  # 🤫 ?admin=true で管理者モード
 
 
-st.title("MMCスタジオ管理システムtest")
+st.title("MMCスタジオ管理システム")
 
 # 🤫 管理者フラグ(is_admin)がTrueの時だけ3つ目のタブを表示！
 if is_admin:
@@ -157,21 +146,45 @@ with tab2:
         today_jst = datetime.now(JST).date()
         date_val = st.date_input("予約日", today_jst, key="res_date")
         
-        # ⏰ 15分刻みの時刻リストを作成（24:00まで対応）
-        time_options = []
-        for h in range(25):
+        # ⏰ 15分刻みの時刻リスト
+        start_options = []
+        for h in range(24):
             for m in (0, 15, 30, 45):
-                if h == 24 and m > 0:
-                    break
-                time_options.append(f"{h:02d}:{m:02d}")
+                start_options.append(f"{h:02d}:{m:02d}")
 
-        # ✨ プルダウン復活！
-        col_start, col_end = st.columns(2)
-        with col_start:
-            start_time_str = st.selectbox("開始時刻", time_options, index=36, key="start_select") # 初期値 09:00
-        with col_end:
-            end_time_str = st.selectbox("終了時刻", time_options, index=40, key="end_select")   # 初期値 10:00
+        # 📱 ボタンタップ式①：開始時刻をボタン/ピルで選択
+        st.write("⏰ **開始時刻を選択**")
+        start_time_str = st.pills("開始時刻", start_options, selection_mode="single", default="09:00", label_visibility="collapsed")
+        if not start_time_str:
+            start_time_str = "09:00"
 
+        # 📱 ボタンタップ式②：利用時間を選択（自動計算）
+        st.write("⏳ **利用時間を選択**")
+        duration_options = {
+            "30分": 30,
+            "1時間": 60,
+            "1.5時間": 90,
+            "2時間": 120,
+            "2.5時間": 150,
+            "3時間": 180,
+            "4時間": 240
+        }
+        selected_duration_label = st.pills("利用時間", list(duration_options.keys()), selection_mode="single", default="1時間", label_visibility="collapsed")
+        if not selected_duration_label:
+            selected_duration_label = "1時間"
+
+        # 開始時刻 ＋ 利用時間 から 終了時刻を自動算出！
+        s_h, s_m = map(int, start_time_str.split(":"))
+        start_dt = datetime(2026, 1, 1, s_h, s_m)
+        end_dt = start_dt + timedelta(minutes=duration_options[selected_duration_label])
+        
+        # 24時越えの対応
+        if end_dt.day > 1 or (end_dt.hour == 0 and end_dt.minute == 0 and duration_options[selected_duration_label] > 0):
+            end_time_str = "24:00"
+        else:
+            end_time_str = end_dt.strftime("%H:%M")
+
+        st.info(f"💡 予約枠: **{start_time_str} 〜 {end_time_str}** （{selected_duration_label}）")
         time_slot = f"{start_time_str}-{end_time_str}"
 
         # 📝 予約フォーム
@@ -181,10 +194,8 @@ with tab2:
             submit = st.form_submit_button("予約する", use_container_width=True)
 
         if submit:
-            # 文字列から時刻比較用の分（minutes）に変換
-            s_h, s_m = map(int, start_time_str.split(":"))
-            e_h, e_m = map(int, end_time_str.split(":"))
             start_minutes = s_h * 60 + s_m
+            e_h, e_m = (24, 0) if end_time_str == "24:00" else map(int, end_time_str.split(":"))
             end_minutes = e_h * 60 + e_m
 
             if start_minutes >= end_minutes:
