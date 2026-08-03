@@ -60,7 +60,6 @@ with tab1:
     with col_in:
         if st.button("🚪 入室する", use_container_width=True, type="primary"):
             if user_name_input:
-                # 🇯🇵 日本時間の現在時刻を取得
                 now_jst = datetime.now(JST)
                 time_str = now_jst.strftime('%H:%M')
 
@@ -84,7 +83,6 @@ with tab1:
     with col_out:
         if st.button("🚪 退室する", use_container_width=True):
             if user_name_input:
-                # 🇯🇵 日本時間の現在時刻を取得
                 now_jst = datetime.now(JST)
                 time_str = now_jst.strftime('%H:%M')
 
@@ -125,10 +123,16 @@ with tab2:
                     if len(end_time.split(":")[0]) == 1:
                         end_time = "0" + end_time
                     
+                    # 24:00の表記をカレンダー用に変換
+                    if end_time == "24:00":
+                        end_time_cal = "23:59:59"
+                    else:
+                        end_time_cal = f"{end_time}:00"
+                    
                     calendar_events.append({
                         "title": f"{name_str} ({time_slot_str})",
                         "start": f"{date_str}T{start_time}:00",
-                        "end": f"{date_str}T{end_time}:00",
+                        "end": f"{date_str}T{end_time_cal}",
                         "backgroundColor": "#3498db",
                         "borderColor": "#2980b9"
                     })
@@ -139,17 +143,25 @@ with tab2:
 
     with col1:
         st.subheader("📝 新規予約")
-        # 🇯🇵 予約日選択の初期値を日本時間の「今日」に設定
         today_jst = datetime.now(JST).date()
         date_val = st.date_input("予約日", today_jst)
         
+        # ⏰ 15分刻みの時刻リストを作成（24:00まで対応）
+        time_options = []
+        for h in range(25):
+            for m in (0, 15, 30, 45):
+                if h == 24 and m > 0:
+                    break
+                time_options.append(f"{h:02d}:{m:02d}")
+
         col_start, col_end = st.columns(2)
         with col_start:
-            start_time_input = st.time_input("開始時刻", time(9, 0))
+            start_time_str = st.selectbox("開始時刻", time_options, index=36) # 初期値 09:00
         with col_end:
-            end_time_input = st.time_input("終了時刻", time(10, 0))
+            # 開始時刻以降の選択肢に絞る初期値設定
+            end_time_str = st.selectbox("終了時刻", time_options, index=40)   # 初期値 10:00
 
-        time_slot = f"{start_time_input.strftime('%H:%M')}-{end_time_input.strftime('%H:%M')}"
+        time_slot = f"{start_time_str}-{end_time_str}"
 
         with st.form("reserve_form"):
             name = st.text_input("名前")
@@ -157,7 +169,13 @@ with tab2:
             submit = st.form_submit_button("予約する")
 
         if submit:
-            if start_time_input >= end_time_input:
+            # 文字列から時刻比較用の分（minutes）に変換
+            s_h, s_m = map(int, start_time_str.split(":"))
+            e_h, e_m = map(int, end_time_str.split(":"))
+            start_minutes = s_h * 60 + s_m
+            end_minutes = e_h * 60 + e_m
+
+            if start_minutes >= end_minutes:
                 st.error("終了時刻は開始時刻より後の時間に設定してください。")
             elif not name:
                 st.error("名前を入力してください。")
@@ -173,10 +191,13 @@ with tab2:
                     for idx, row in target_date_df.iterrows():
                         try:
                             exist_start_str, exist_end_str = row["時間"].split("-")
-                            exist_start = datetime.strptime(exist_start_str.strip(), "%H:%M").time()
-                            exist_end = datetime.strptime(exist_end_str.strip(), "%H:%M").time()
+                            ex_s_h, ex_s_m = map(int, exist_start_str.strip().split(":"))
+                            ex_e_h, ex_e_m = map(int, exist_end_str.strip().split(":"))
                             
-                            if (start_time_input < exist_end) and (end_time_input > exist_start):
+                            exist_start_m = ex_s_h * 60 + ex_s_m
+                            exist_end_m = ex_e_h * 60 + ex_e_m
+                            
+                            if (start_minutes < exist_end_m) and (end_minutes > exist_start_m):
                                 is_overlap = True
                                 overlap_info = f"{row['名前']} さんの予約 ({row['時間']})"
                                 break
@@ -204,39 +225,50 @@ with tab2:
 
         st.divider()
 
+        # 🔍 キャンセル機能の改善（検索フィルター付き）
         st.subheader("❌ 予約のキャンセル")
         if not df.empty:
-            cancel_options = [f"{row['名前']} さんの予約 ({row['予約日']} : {row['時間']})" for index, row in df.iterrows()]
-            
-            with st.form("cancel_form"):
-                selected_cancel = st.selectbox("キャンセルする予約", cancel_options)
-                input_password = st.text_input("キャンセル用パスワード", type="password")
-                cancel_submit = st.form_submit_button("この予約をキャンセル")
+            search_name = st.text_input("🔍 名前で予約を検索（部分一致）", placeholder="名前を入力して絞り込み...")
+
+            # 絞り込み処理
+            filtered_df = df.copy()
+            if search_name:
+                filtered_df = filtered_df[filtered_df["名前"].str.contains(search_name.strip(), na=False)]
+
+            if not filtered_df.empty:
+                cancel_options = [f"{row['名前']} さんの予約 ({row['予約日']} : {row['時間']})" for index, row in filtered_df.iterrows()]
                 
-            if cancel_submit:
-                if not input_password:
-                    st.error("パスワードを入力してください。")
-                else:
-                    opt_index = cancel_options.index(selected_cancel)
-                    target_row = df.iloc[opt_index]
+                with st.form("cancel_form"):
+                    selected_cancel = st.selectbox("キャンセルする予約を選択", cancel_options)
+                    input_password = st.text_input("キャンセル用パスワード", type="password")
+                    cancel_submit = st.form_submit_button("この予約をキャンセル")
                     
-                    cancel_payload = {
-                        "action": "cancel",
-                        "name": str(target_row["名前"]),
-                        "date": str(target_row["予約日"]),
-                        "time_slot": str(target_row["時間"]),
-                        "password": str(input_password)
-                    }
-                    
-                    try:
-                        response = requests.post(gas_url, json=cancel_payload)
-                        if response.text == "Success_Cancel":
-                            st.success("❌ 予約をキャンセルしました！")
-                            st.rerun()
-                        else:
-                            st.error(f" {response.text}")
-                    except Exception as e:
-                        st.error(f"通信エラー: {e}")
+                if cancel_submit:
+                    if not input_password:
+                        st.error("パスワードを入力してください。")
+                    else:
+                        opt_index = cancel_options.index(selected_cancel)
+                        target_row = filtered_df.iloc[opt_index]
+                        
+                        cancel_payload = {
+                            "action": "cancel",
+                            "name": str(target_row["名前"]),
+                            "date": str(target_row["予約日"]),
+                            "time_slot": str(target_row["時間"]),
+                            "password": str(input_password)
+                        }
+                        
+                        try:
+                            response = requests.post(gas_url, json=cancel_payload)
+                            if response.text == "Success_Cancel":
+                                st.success("❌ 予約をキャンセルしました！")
+                                st.rerun()
+                            else:
+                                st.error(f"失敗: {response.text}")
+                        except Exception as e:
+                            st.error(f"通信エラー: {e}")
+            else:
+                st.info(f"「{search_name}」さんの予約は見つかりませんでした。")
         else:
             st.info("現在、キャンセルできる予約はありません。")
 
@@ -272,7 +304,7 @@ with tab2:
         """
 
         calendar_options = {
-            "height": 800,  # ↕️ 縦幅をガッツリ伸ばして夜の時間帯まで見やすく！
+            "height": 800,
             "initialView": "timeGridWeek",
             "headerToolbar": {
                 "left": "prev,next today",
