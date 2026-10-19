@@ -179,7 +179,7 @@ with tab2:
         st.write("① **開始（時）**")
         start_hour_str = st.pills(
             "開始（時）", 
-            [f"{h:02d}時" for h in range(8, 24)], 
+            [f"{h:02d}時" for h in range(0, 24)], 
             selection_mode="single", 
             default="09時", 
             key="pills_hour",
