@@ -59,6 +59,22 @@ else:
 # ─── タブ1：打刻画面（メイン） ───
 with tab1:
     st.subheader("📱 入退室打刻")
+
+    # 🟢 リアルタイム入室ステータス表示
+    try:
+        res_status = requests.get(gas_url, timeout=5)
+        if res_status.status_code == 200:
+            active_users = res_status.json().get("active_users", [])
+            if active_users:
+                users_str = ", ".join(active_users)
+                st.success(f"🟢 **現在利用中 ({len(active_users)}名)**: {users_str}")
+            else:
+                st.info("⚪️ **現在空き**（利用中のメンバーはいません）")
+        else:
+            st.caption("⚠️ 利用状況の取得に失敗しました。")
+    except Exception:
+        st.caption("⚠️ 利用状況の通信エラー。")
+
     st.write("名前を入力して、入室または退室ボタンを押してください。")
 
     # オートフィル対応のテキスト入力欄
@@ -84,6 +100,7 @@ with tab1:
                     if "Success" in res.text:
                         st.balloons()
                         st.success(f"🎉 **{user_name_input}** さん、入室を記録しました！（{time_str}）")
+                        st.rerun()
                     else:
                         st.error(f"打刻エラー: {res.text}")
                 except Exception as e:
@@ -106,6 +123,7 @@ with tab1:
                     res = requests.post(gas_url, json=log_payload)
                     if "Success" in res.text:
                         st.success(f"👋 **{user_name_input}** さん、退室を記録しました！（{time_str}）")
+                        st.rerun()
                     else:
                         st.error(f"打刻エラー: {res.text}")
                 except Exception as e:
@@ -208,7 +226,7 @@ with tab2:
         s_m = int(start_min_str.replace("分", ""))
         start_time_str = f"{s_h:02d}:{s_m:02d}"
 
-        # 終了時間の計算（2026年の仮日付で計算）
+        # 終了時間の計算
         start_dt = datetime(2026, 1, 1, s_h, s_m)
         end_dt = start_dt + timedelta(minutes=duration_dict[selected_duration_label])
         
@@ -273,7 +291,7 @@ with tab2:
                     }
                     try:
                         response = requests.post(gas_url, json=payload)
-                        if response.text == "Success":
+                        if "Success" in response.text:
                             st.success(f"🎉 {name}さんの予約完了！（{time_slot}）")
                             st.rerun()
                         else:
@@ -317,7 +335,7 @@ with tab2:
                         
                         try:
                             response = requests.post(gas_url, json=cancel_payload)
-                            if response.text == "Success_Cancel":
+                            if "Success_Cancel" in response.text:
                                 st.success("❌ 予約をキャンセルしました！")
                                 st.rerun()
                             else:
